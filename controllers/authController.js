@@ -4,19 +4,89 @@ const db = require("../config/database"); // Import the database connection
 
 // Register User
 exports.registerUser = async (req, res) => {
-  const { name, email, password } = req.body;
+  const {
+    title,
+    first_name,
+    middle,
+    last_name,
+    degree,
+    specialty,
+    phone,
+    country,
+    orcid,
+    email,
+    confirm_email,
+    alternative_email,
+    username,
+    password,
+    available_as_reviewer,
+    receive_news,
+    comments,
+  } = req.body;
+
+  // Validate required fields
+  if (
+    !title ||
+    !first_name ||
+    !last_name ||
+    !degree ||
+    !phone ||
+    !country ||
+    !orcid ||
+    !email ||
+    !confirm_email ||
+    !username ||
+    !password
+  ) {
+    return res
+      .status(400)
+      .json({ message: "All required fields must be filled out." });
+  }
+
+  if (email !== confirm_email) {
+    return res.status(400).json({ message: "Emails do not match." });
+  }
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     db.run(
-      `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`,
-      [name, email, hashedPassword],
+      `INSERT INTO users (
+        title, first_name, middle, last_name, degree, specialty, phone, country,
+        orcid, email, alternative_email, username, password, available_as_reviewer,
+        receive_news, comments
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        title,
+        first_name,
+        middle || null,
+        last_name,
+        degree,
+        specialty || null,
+        phone,
+        country,
+        orcid,
+        email,
+        alternative_email || null,
+        username,
+        hashedPassword,
+        available_as_reviewer ? 1 : 0,
+        receive_news ? 1 : 0,
+        comments || null,
+      ],
       function (err) {
         if (err) {
-          return res.status(400).json({ message: "User already exists" });
+          if (err.message.includes("UNIQUE constraint")) {
+            return res.status(400).json({ message: "User already exists." });
+          }
+          return res.status(500).json({
+            message: "Database error.",
+            error: err.message,
+          });
         }
-        res.status(201).json({ id: this.lastID, name, email });
+        res
+          .status(201)
+          .json({ id: this.lastID, first_name, last_name, email, username });
       }
     );
   } catch (error) {
