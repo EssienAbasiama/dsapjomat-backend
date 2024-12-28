@@ -48,6 +48,14 @@ const addColumns = [
     query: `ALTER TABLE users ADD COLUMN receive_news INTEGER DEFAULT 0`,
   },
   { column: "comments", query: `ALTER TABLE users ADD COLUMN comments TEXT` },
+  {
+    column: "refresh_token",
+    query: `ALTER TABLE users ADD COLUMN refresh_token TEXT`,
+  },
+  {
+    column: "role",
+    query: `ALTER TABLE users ADD COLUMN role TEXT`,
+  },
 ];
 
 // Columns to remove
