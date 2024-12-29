@@ -30,12 +30,10 @@ db.serialize(() => {
       running_title TEXT,
       moreSubject TEXT,
       co_authors TEXT,  -- JSON string
-      content TEXT,
       agreement TEXT,
       abstract_text TEXT,
       tags TEXT,        -- JSON string
       subjects TEXT,    -- JSON string
-      other_subjects TEXT,
       comments TEXT,
       suggestedReviewers TEXT,  -- JSON string
       file_type TEXT,
@@ -107,10 +105,7 @@ const addColumnsManuscripts = [
     column: "co_authors",
     query: `ALTER TABLE manuscripts ADD COLUMN co_authors TEXT`,
   },
-  {
-    column: "content",
-    query: `ALTER TABLE manuscripts ADD COLUMN content TEXT`,
-  },
+
   {
     column: "agreement",
     query: `ALTER TABLE manuscripts ADD COLUMN agreement TEXT`,
@@ -124,10 +119,7 @@ const addColumnsManuscripts = [
     column: "subjects",
     query: `ALTER TABLE manuscripts ADD COLUMN subjects TEXT`,
   },
-  {
-    column: "other_subjects",
-    query: `ALTER TABLE manuscripts ADD COLUMN other_subjects TEXT`,
-  },
+
   {
     column: "comments",
     query: `ALTER TABLE manuscripts ADD COLUMN comments TEXT`,
@@ -164,6 +156,10 @@ const addColumnsManuscripts = [
   {
     column: "created_at",
     query: `ALTER TABLE manuscripts ADD COLUMN created_at TEXT`,
+  },
+  {
+    column: "status",
+    query: `ALTER TABLE manuscripts ADD COLUMN status TEXT`,
   },
 ];
 
@@ -283,11 +279,6 @@ function removeColumnsFromTable(tableName, columnsToRemove) {
 }
 
 // Example: Removing columns
-removeColumnsFromTable("users", ["name"]); // Replace 'name' with the column to remove
-removeColumnsFromTable("manuscripts", [
-  "type", // Removed from new columns
-  "title", // Removed from new columns
-  "responsibility", // Removed from new columns
-  "termsAndCondition", // Removed from new columns
-]);
+// removeColumnsFromTable("users", [""]);
+// removeColumnsFromTable("manuscripts", ["other_subjects", "content"]);
 module.exports = db;
