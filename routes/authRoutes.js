@@ -4,6 +4,7 @@ const {
   loginUser,
   getAllUsers,
   getUserById,
+  refreshToken,
 } = require("../controllers/authController");
 const { protect } = require("../middlewares/authMiddleware");
 
@@ -13,5 +14,6 @@ router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/users", protect, getAllUsers);
 router.get("/users/:id", protect, getUserById);
+router.post("/refresh", refreshToken);
 
 module.exports = router;

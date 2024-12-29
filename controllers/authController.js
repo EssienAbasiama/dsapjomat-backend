@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("../config/database"); // Import the database connection
+const { JWT_SECRET, REFRESH_SECRET } = require("../Utils/constants");
 
 // Register User
 exports.registerUser = async (req, res) => {
@@ -97,11 +98,6 @@ exports.registerUser = async (req, res) => {
 exports.loginUser = (req, res) => {
   const { email, password } = req.body;
 
-  // Ensure JWT_SECRET and REFRESH_SECRET are present
-  const JWT_SECRET = process.env.JWT_SECRET || "defaultAccessTokenSecret"; // Use default if not found
-  const REFRESH_SECRET =
-    process.env.REFRESH_SECRET || "defaultRefreshTokenSecret"; // Use default if not found
-
   // Start by querying the user
   db.get(`SELECT * FROM users WHERE email = ?`, [email], async (err, user) => {
     if (err || !user) {
@@ -127,6 +123,8 @@ exports.loginUser = (req, res) => {
     const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, {
       expiresIn: "7d",
     });
+    console.log("Token", token);
+    console.log("refreshToken", refreshToken);
 
     // Save refresh token in the database (for verification and rotation)
     db.run(
@@ -145,12 +143,8 @@ exports.loginUser = (req, res) => {
           return res.json({
             token,
             refreshToken,
-            expiresAt: accessTokenExpiry,
-            user: {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-            },
+            expiresAt: refreshTokenExpiry,
+            user,
           });
         }
       }
@@ -160,7 +154,7 @@ exports.loginUser = (req, res) => {
 
 // Get All Users
 exports.getAllUsers = (req, res) => {
-  db.all(`SELECT id, name, email FROM users`, [], (err, rows) => {
+  db.all(`SELECT id, email FROM users`, [], (err, rows) => {
     if (err) {
       return res.status(500).json({ message: err.message });
     }
@@ -172,7 +166,7 @@ exports.getAllUsers = (req, res) => {
 exports.getUserById = (req, res) => {
   const { id } = req.params;
 
-  db.get(`SELECT id, name, email FROM users WHERE id = ?`, [id], (err, row) => {
+  db.get(`SELECT id, email FROM users WHERE id = ?`, [id], (err, row) => {
     if (err || !row) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -181,7 +175,15 @@ exports.getUserById = (req, res) => {
 };
 
 exports.refreshToken = (req, res) => {
-  const refreshToken = req.cookies.refreshToken;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const refreshToken = authHeader.split(" ")[1]; // Extract the token after 'Bearer '
+
+  console.log("refreshToken", refreshToken);
 
   if (!refreshToken) {
     return res.status(401).json({ message: "Unauthorized" });
@@ -191,26 +193,54 @@ exports.refreshToken = (req, res) => {
     `SELECT * FROM users WHERE refresh_token = ?`,
     [refreshToken],
     (err, user) => {
-      if (err || !user) {
-        return res.status(403).json({ message: "Invalid refresh token" });
+      if (err) {
+        console.error("Database error:", err);
+        return res.status(500).json({ message: "Database error" });
       }
 
-      // Verify refresh token
-      jwt.verify(refreshToken, process.env.REFRESH_SECRET, (err, decoded) => {
+      if (!user) {
+        return res.status(403).json({ message: "Invalid refresh token" });
+      }
+      console.log("User", user);
+
+      // Verify the refresh token
+      jwt.verify(refreshToken, REFRESH_SECRET, (err, decoded) => {
         if (err) {
-          return res.status(403).json({ message: "Invalid refresh token" });
+          return res.status(403).json({ message: "Token Verification Failed" });
         }
 
-        const newToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-          expiresIn: "1h",
+        // Generate a new refresh token
+        const newRefreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, {
+          expiresIn: "7d", // Set an expiration time for refresh token, e.g., 7 days
+        });
+
+        // Generate a new access token
+        const newAccessToken = jwt.sign({ id: user.id }, JWT_SECRET, {
+          expiresIn: "1h", // 1 hour
         });
 
         const newTokenExpiry = Date.now() + 60 * 60 * 1000; // 1 hour
 
-        res.json({
-          token: newToken,
-          expiresAt: newTokenExpiry,
-        });
+        // Save the new refresh token in the database
+        db.run(
+          `UPDATE users SET refresh_token = ? WHERE id = ?`,
+          [newRefreshToken, user.id],
+          (err) => {
+            if (err) {
+              console.error("Database error:", err);
+              return res
+                .status(500)
+                .json({ message: "Error saving new refresh token" });
+            }
+
+            // Return the new tokens to the client
+            res.json({
+              token: newAccessToken,
+              refreshToken: newRefreshToken,
+              expiresAt: newTokenExpiry,
+            });
+          }
+        );
       });
     }
   );

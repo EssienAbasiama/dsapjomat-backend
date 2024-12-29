@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
-const db = require("../config/database"); // Import your SQLite database connection
+const db = require("../config/database");
+const { JWT_SECRET, REFRESH_SECRET } = require("../Utils/constants");
 
-// Protect route middleware
 const protect = (req, res, next) => {
   let token;
 
@@ -12,13 +12,20 @@ const protect = (req, res, next) => {
   ) {
     try {
       token = req.headers.authorization.split(" ")[1]; // Extract token
+      console.log("Tokkk", token);
+      if (!JWT_SECRET) {
+        return res.status(500).json({
+          message: "Server configuration error: JWT_SECRET is missing",
+        });
+      }
 
       // Verify the token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, REFRESH_SECRET);
+      console.log("decoded", decoded);
 
       // Query SQLite to find the user based on decoded ID
       db.get(
-        `SELECT id, name, email FROM users WHERE id = ?`,
+        `SELECT id, email FROM users WHERE id = ?`,
         [decoded.id],
         (err, user) => {
           if (err || !user) {
@@ -26,7 +33,7 @@ const protect = (req, res, next) => {
               .status(401)
               .json({ message: "Not authorized, user not found" });
           }
-
+          console.log(user);
           req.user = user; // Attach user info to the request
           next(); // Continue to the next middleware or route handler
         }
