@@ -3,7 +3,11 @@ const upload = require("../middlewares/fileUpload");
 
 // Create Manuscript
 exports.createManuscript = [
-  upload, // Handles multiple file uploads
+  (req, res, next) => {
+    req.body.type = "manuscript"; // Set type to "manuscript" for dynamic folder selection
+    next();
+  },
+  upload, // Middleware to handle file uploads
   (req, res) => {
     const {
       manuscript_type,
@@ -16,21 +20,19 @@ exports.createManuscript = [
       abstract_text,
       tags,
       subjects,
-
       comments,
       suggestedReviewers,
       file_type,
       file_description,
       cover_letter,
       isDraft,
-      files,
       drafted_at,
       created_by,
       created_at,
     } = req.body;
 
-    // Gather file information
-    const fileDetails = files.map((file) => ({
+    // Get details of uploaded files (if any)
+    const fileDetails = req.files.map((file) => ({
       filePath: file.path,
       originalName: file.originalname,
     }));
@@ -42,46 +44,48 @@ exports.createManuscript = [
       });
     }
 
+    // Prepare the SQL query for inserting the manuscript data
     const query = `
       INSERT INTO manuscripts (
         manuscript_type, full_title, running_title, moreSubject, co_authors, agreement,
         abstract_text, tags, subjects, comments, suggestedReviewers, file_type,
-        file_description, files, cover_letter, isDraft, drafted_at, created_by, created_at,status
+        file_description, files, cover_letter, isDraft, drafted_at, created_by, created_at, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
+    // Prepare the parameters for the SQL query
     const params = [
       manuscript_type,
       full_title,
       running_title,
       moreSubject || null,
       JSON.stringify(co_authors || []),
-
       agreement || null,
       abstract_text,
       JSON.stringify(tags || []),
       JSON.stringify(subjects || []),
-
       comments || null,
       JSON.stringify(suggestedReviewers || []),
       file_type || null,
       file_description || null,
-      JSON.stringify(files || []),
+      JSON.stringify(fileDetails || []), // Store file details as JSON
       cover_letter || null,
       isDraft ? 1 : 0,
-      drafted_at || "2023-11-15T00:00:00Z",
+      drafted_at || new Date().toISOString(),
       created_by || null,
       created_at || null,
       "pending",
     ];
-    console.log(params);
+
+    // Execute the query to save the manuscript into the database
     db.run(query, params, function (err) {
       if (err) {
-        console.error("Error saving manuscript:", err.message); // Log the error message
+        console.error("Error saving manuscript:", err.message);
         return res
           .status(500)
           .json({ message: "Database error.", error: err.message });
       }
+      // Return the response with the manuscript ID and file details
       res.status(201).json({
         id: this.lastID,
         message: "Manuscript created successfully.",

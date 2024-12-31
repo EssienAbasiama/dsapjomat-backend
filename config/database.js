@@ -48,6 +48,20 @@ db.serialize(() => {
   `);
 });
 
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS news (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      main_text TEXT NOT NULL,
+      image TEXT, -- URL or path to the banner image
+      created_by INTEGER, -- User ID or creator reference
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+});
+
 // Columns to add for users
 const addColumnsUsers = [
   { column: "title", query: `ALTER TABLE users ADD COLUMN title TEXT` },
