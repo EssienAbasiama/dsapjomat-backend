@@ -1,5 +1,6 @@
 const db = require("../config/database");
 const upload = require("../middlewares/fileUpload");
+const moment = require("moment");
 
 // Create Manuscript
 exports.createManuscript = [
@@ -29,10 +30,12 @@ exports.createManuscript = [
       drafted_at,
       created_by,
       created_at,
+      files,
     } = req.body;
 
+    console.log("Res", req.body);
     // Get details of uploaded files (if any)
-    const fileDetails = req.files.map((file) => ({
+    const fileDetails = files.map((file) => ({
       filePath: file.path,
       originalName: file.originalname,
     }));
@@ -262,5 +265,75 @@ exports.deleteManuscript = (req, res) => {
       return res.status(404).json({ message: "Manuscript not found." });
     }
     res.status(200).json({ message: "Manuscript deleted successfully." });
+  });
+};
+
+exports.getManuscriptsByUser = (req, res) => {
+  const { created_by } = req.query;
+
+  // Parse created_by as an integer
+  const createdBy = parseInt(created_by, 10);
+
+  // Validate created_by
+  if (isNaN(createdBy)) {
+    return res.status(400).json({
+      message: "Invalid created_by value. It must be an integer.",
+    });
+  }
+
+  // SQL query to fetch all manuscripts for the specific user
+  const query = `
+    SELECT * FROM manuscripts WHERE created_by = ?
+  `;
+  const params = [createdBy];
+
+  // Execute the query
+  db.all(query, params, (err, rows) => {
+    if (err) {
+      console.error("Error retrieving manuscripts:", err.message);
+      return res.status(500).json({
+        message: "Database error.",
+        error: err.message,
+      });
+    }
+    console.log("Rows", rows);
+
+    // Get the current date and calculate the start date (12 months ago)
+    const endDate = moment();
+    const startDate = moment().subtract(12, "months");
+
+    // Initialize an object to store the counts for each of the last 12 months
+    const months = {};
+
+    // Generate keys for the last 12 months as short month names (e.g., "Jan", "Feb")
+    for (let i = 0; i < 12; i++) {
+      const month = moment().subtract(i, "months").format("MMM");
+      months[month] = 0;
+    }
+
+    // Filter manuscripts to include only those within the last 12 months
+    const filteredManuscripts = rows.filter((manuscript) => {
+      const createdAt = moment(manuscript.created_at);
+      return createdAt.isBetween(startDate, endDate, "month", "[]"); // Inclusive range
+    });
+
+    // Count manuscripts for each of the last 12 months
+    filteredManuscripts.forEach((manuscript) => {
+      const month = moment(manuscript.created_at).format("MMM"); // Format month as "MMM"
+      if (months.hasOwnProperty(month)) {
+        months[month] += 1; // Increment count for the corresponding month
+      }
+    });
+
+    // Convert the months object into an array of the required format
+    const formattedData = Object.keys(months)
+      .reverse() // Reverse to maintain chronological order
+      .map((month) => ({
+        name: month,
+        uv: months[month].toString(), // Convert count to string (if needed)
+      }));
+
+    // Return the formatted data
+    return res.status(200).json({ data: formattedData });
   });
 };

@@ -34,8 +34,6 @@ const fileFilter = (req, file, cb) => {
 
 // Create a dynamic upload function based on request type
 const upload = (req, res, next) => {
-  console.log("res", res);
-  console.log("next", next);
   const type = req.body.type || "manuscript";
   typeURL = type;
   let uploadMiddleware;
