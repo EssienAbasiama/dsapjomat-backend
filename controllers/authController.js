@@ -55,8 +55,8 @@ exports.registerUser = async (req, res) => {
       `INSERT INTO users (
         title, first_name, middle, last_name, degree, specialty, phone, country,
         orcid, email, alternative_email, username, password, available_as_reviewer,
-        receive_news, comments
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        receive_news, comments,role
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,'user')`,
       [
         title,
         first_name,
