@@ -299,23 +299,19 @@ exports.deleteManuscript = (req, res) => {
 exports.getManuscriptsByUser = (req, res) => {
   const { created_by } = req.query;
 
-  // Parse created_by as an integer
   const createdBy = parseInt(created_by, 10);
 
-  // Validate created_by
   if (isNaN(createdBy)) {
     return res.status(400).json({
       message: "Invalid created_by value. It must be an integer.",
     });
   }
 
-  // SQL query to fetch all manuscripts for the specific user
   const query = `
     SELECT * FROM manuscripts WHERE created_by = ?
   `;
   const params = [createdBy];
 
-  // Execute the query
   db.all(query, params, (err, rows) => {
     if (err) {
       console.error("Error retrieving manuscripts:", err.message);
@@ -332,53 +328,46 @@ exports.getManuscriptsByUser = (req, res) => {
     // Initialize an object to store the counts for each of the last 12 months
     const months = {};
 
-    // Generate keys for the last 12 months as short month names (e.g., "Jan", "Feb")
     for (let i = 0; i < 12; i++) {
       const month = moment().subtract(i, "months").format("MMM");
       months[month] = 0;
     }
 
-    // Filter manuscripts to include only those within the last 12 months
     const filteredManuscripts = rows.filter((manuscript) => {
       const createdAt = moment(manuscript.created_at);
       return createdAt.isBetween(startDate, endDate, "month", "[]"); // Inclusive range
     });
 
-    // Get the base URL using req.protocol and req.get('host')
     const baseUrl = `${req.protocol}://${req.get("host")}/`;
 
-    // Add the complete file URL for each manuscript
     const manuscriptsWithUrl = filteredManuscripts.map((manuscript) => {
       // Replace backslashes with forward slashes
       const filePath = manuscript.filePath?.replace(/\\/g, "/");
 
-      // Return the manuscript with an additional property for the complete file URL
       return {
         ...manuscript,
-        fileUrl: `${baseUrl}${filePath}`, // Append the file path to the base URL
+        fileUrl: `${baseUrl}${filePath}`,
       };
     });
 
     // Count manuscripts for each of the last 12 months
     manuscriptsWithUrl.forEach((manuscript) => {
-      const month = moment(manuscript.created_at).format("MMM"); // Format month as "MMM"
+      const month = moment(manuscript.created_at).format("MMM");
       if (months.hasOwnProperty(month)) {
-        months[month] += 1; // Increment count for the corresponding month
+        months[month] += 1;
       }
     });
 
-    // Convert the months object into an array of the required format
     const formattedData = Object.keys(months)
-      .reverse() // Reverse to maintain chronological order
+      .reverse()
       .map((month) => ({
         name: month,
-        uv: months[month].toString(), // Convert count to string (if needed)
+        uv: months[month].toString(),
       }));
 
-    // Return the formatted data along with the file URLs
     return res.status(200).json({
       data: formattedData,
-      manuscripts: manuscriptsWithUrl, // Include the manuscripts with file URLs
+      manuscripts: manuscriptsWithUrl,
     });
   });
 };
@@ -393,7 +382,6 @@ exports.getManuscriptsByCoAuthor = (req, res) => {
     });
   }
 
-  // SQL query to fetch all manuscripts
   const query = `SELECT * FROM manuscripts`;
 
   // Execute the query
@@ -558,5 +546,143 @@ exports.updateManuscriptStatus = (req, res) => {
       manuscriptId: id,
       updatedStatus: status,
     });
+  });
+};
+
+exports.getManuscriptsByDraftAndStatus = (req, res) => {
+  // Destructure query parameters
+  const { isDraft, status } = req.query;
+
+  const isDraftBoolean = isDraft === "true";
+
+  if (!status || typeof status !== "string") {
+    return res
+      .status(400)
+      .json({ message: "Invalid status value. It must be a string." });
+  }
+
+  // SQL query to fetch manuscripts along with user details
+  const query = `
+  SELECT 
+    manuscripts.*, 
+    users.id AS userId, 
+    users.email AS userEmail,
+    users.username AS userUsername
+  FROM manuscripts
+  JOIN users ON manuscripts.created_by = users.id
+  WHERE manuscripts.isDraft = ? AND manuscripts.status = ?
+`;
+
+  const params = [isDraftBoolean ? 1 : 0, status];
+  console.log("Params", params);
+
+  // Execute the query
+  db.all(query, params, (err, rows) => {
+    if (err) {
+      console.error("Error retrieving manuscripts:", err.message);
+      return res
+        .status(500)
+        .json({ message: "Database error.", error: err.message });
+    }
+
+    // Map over rows to process file URLs
+    const manuscriptsWithUrls = rows.map((manuscript) => {
+      const fileDetails = JSON.parse(manuscript.files || "[]");
+
+      const filesWithUrls = fileDetails.map((file) => {
+        if (!file || !file.filePath) return file;
+
+        const filePath = file.filePath.replace(/\\/g, "/");
+        const fileUrl = `${req.protocol}://${req.get("host")}/${filePath}`;
+        return { ...file, fileUrl };
+      });
+
+      return {
+        ...manuscript,
+        files: filesWithUrls,
+        created_by: {
+          id: manuscript.userId,
+          email: manuscript.userEmail,
+          username: manuscript.userUsername,
+        },
+      };
+    });
+
+    return res.status(200).json({ manuscripts: manuscriptsWithUrls });
+  });
+};
+
+exports.getManuscriptsById = (req, res) => {
+  const manuscriptId = req.params.id;
+
+  // SQL query to fetch manuscript by ID along with user details
+  const query = `
+    SELECT 
+      manuscripts.*, 
+      users.id AS userId, 
+      users.email AS userEmail,
+      users.username AS userUsername
+    FROM manuscripts
+    JOIN users ON manuscripts.created_by = users.id
+    WHERE manuscripts.id = ?
+  `;
+
+  // Execute the query
+  db.get(query, [manuscriptId], (err, row) => {
+    if (err) {
+      console.error("Error fetching manuscript:", err.message);
+      return res
+        .status(500)
+        .json({ message: "Database error.", error: err.message });
+    }
+
+    if (!row) {
+      return res.status(404).json({ message: "Manuscript not found." });
+    }
+
+    // Process the manuscript data
+    try {
+      // Parse JSON fields
+      const tags = JSON.parse(row.tags || "[]");
+      const subjects = JSON.parse(row.subjects || "[]");
+      const files = JSON.parse(row.files || "[]");
+      const co_authors = JSON.parse(row.co_authors || "[]");
+      const suggestedReviewers = JSON.parse(row.suggestedReviewers || "[]");
+
+      // Generate file URLs
+      const filesWithUrls = files.map((file) => {
+        if (!file || !file.filePath) return file;
+
+        const filePath = file.filePath.replace(/\\/g, "/");
+        const fileUrl = `${req.protocol}://${req.get("host")}/${filePath}`;
+        return { ...file, fileUrl };
+      });
+
+      // Structure the response
+      const manuscriptWithUrls = {
+        ...row,
+        tags,
+        subjects,
+        files: filesWithUrls,
+        co_authors,
+        suggestedReviewers,
+        created_by: {
+          id: row.userId,
+          email: row.userEmail,
+          username: row.userUsername,
+        },
+      };
+
+      // Send the response
+      res.status(200).json(manuscriptWithUrls);
+    } catch (parseError) {
+      console.error("Error processing manuscript data:", parseError.message);
+      return res
+        .status(500)
+        .json({
+          message: "Error processing manuscript data.",
+          error: parseError.message,
+        });
+    }
   });
 };
