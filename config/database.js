@@ -95,6 +95,14 @@ const addColumnsUsers = [
     query: `ALTER TABLE users ADD COLUMN refresh_token TEXT`,
   },
   { column: "role", query: `ALTER TABLE users ADD COLUMN role TEXT` },
+  {
+    column: "is_verified",
+    query: `ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0`,
+  },
+  {
+    column: "verification_token",
+    query: `ALTER TABLE users ADD COLUMN verification_token INTEGER DEFAULT TEXT`,
+  },
 ];
 
 // Columns to add for manuscripts

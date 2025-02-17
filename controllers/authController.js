@@ -1,7 +1,9 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const db = require("../config/database"); // Import the database connection
+const db = require("../config/database");
 const { JWT_SECRET, REFRESH_SECRET } = require("../Utils/constants");
+const sendEmail = require("../Utils/sendEmail");
+const crypto = require("crypto");
 
 // Register User
 exports.registerUser = async (req, res) => {
@@ -50,13 +52,14 @@ exports.registerUser = async (req, res) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
+    const verificationToken = crypto.randomBytes(32).toString("hex");
 
     db.run(
       `INSERT INTO users (
         title, first_name, middle, last_name, degree, specialty, phone, country,
         orcid, email, alternative_email, username, password, available_as_reviewer,
-        receive_news, comments,role
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,'user')`,
+        receive_news, comments,role,verification_token, is_verified
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,'user',?,0)`,
       [
         title,
         first_name,
@@ -74,8 +77,9 @@ exports.registerUser = async (req, res) => {
         available_as_reviewer ? 1 : 0,
         receive_news ? 1 : 0,
         comments || null,
+        verificationToken,
       ],
-      function (err) {
+      async function (err) {
         if (err) {
           if (err.message.includes("UNIQUE constraint")) {
             return res.status(400).json({ message: "User already exists." });
@@ -85,15 +89,34 @@ exports.registerUser = async (req, res) => {
             error: err.message,
           });
         }
+
+        // Send verification email
+        const verificationLink = `http://localhost:5173/verify-email/${verificationToken}`;
+        const emailSubject = "Verify Your Email";
+
+        const emailHTML = `
+        <div style="font-family: Arial, sans-serif; text-align: center;">
+          <h2>Welcome to Our Platform!</h2>
+          <p>Click the button below to verify your email:</p>
+          <a href="${verificationLink}" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Verify Email
+          </a>
+          <p>If you didn't request this, please ignore this email.</p>
+        </div>
+      `;
+
+        await sendEmail(email, emailSubject, emailHTML);
+
         res
           .status(201)
-          .json({ id: this.lastID, first_name, last_name, email, username });
+          .json({ message: "User registered! Please verify your email." });
       }
     );
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
 // Login User
 exports.loginUser = (req, res) => {
   const { email, password } = req.body;
@@ -244,4 +267,112 @@ exports.refreshToken = (req, res) => {
       });
     }
   );
+};
+
+exports.verifyEmail = async (req, res) => {
+  const { token } = req.params;
+
+  db.get(
+    "SELECT * FROM users WHERE verification_token = ?",
+    [token],
+    (err, user) => {
+      if (err) {
+        return res.status(500).json({ message: "Database error." });
+      }
+      console.log("token", token);
+
+      if (!user) {
+        return res.status(400).json({ message: "Invalid or expired token." });
+      }
+
+      // Update user verification status
+      db.run(
+        "UPDATE users SET is_verified = 1, verification_token = NULL WHERE id = ?",
+        [user.id],
+        (updateErr) => {
+          if (updateErr) {
+            return res
+              .status(500)
+              .json({ message: "Error updating verification status." });
+          }
+          res.status(200).json({ message: "Email verified successfully!" });
+        }
+      );
+    }
+  );
+};
+
+exports.resendVerification = async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: "Email is required." });
+  }
+
+  try {
+    db.get(
+      "SELECT id, is_verified FROM users WHERE email = ?",
+      [email],
+      async (err, user) => {
+        if (err) {
+          return res
+            .status(500)
+            .json({ message: "Database error.", error: err.message });
+        }
+
+        if (!user) {
+          return res.status(404).json({ message: "User not found." });
+        }
+        console.log("user", user);
+
+        if (user.is_verified) {
+          return res
+            .status(400)
+            .json({ message: "Email is already verified." });
+        }
+
+        // Generate a new verification token
+        const newVerificationToken = crypto.randomBytes(32).toString("hex");
+
+        // Update the verification token in the database
+        db.run(
+          "UPDATE users SET verification_token = ? WHERE email = ?",
+          [newVerificationToken, email],
+          async (updateErr) => {
+            if (updateErr) {
+              return res
+                .status(500)
+                .json({ message: "Database error.", error: updateErr.message });
+            }
+
+            // Send the verification email
+            const verificationLink = `http://localhost:5173/verify-email/${newVerificationToken}`;
+            const emailSubject = "JMAT:Resend: Verify Your Email";
+            const emailHTML = `
+              <div style="font-family: Arial, sans-serif; text-align: center;">
+                <h2>Email Verification</h2>
+                <p>Click the button below to verify your email:</p>
+                <a href="${verificationLink}" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                  Verify Email
+                </a>
+                <p>If you didn't request this, please ignore this email.</p>
+              </div>
+            `;
+
+            await sendEmail(email, emailSubject, emailHTML);
+
+            return res
+              .status(200)
+              .json({ message: "Verification email resent successfully." });
+          }
+        );
+      }
+    );
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+exports.test = () => {
+  console.log("Testing Testing Testing");
 };
