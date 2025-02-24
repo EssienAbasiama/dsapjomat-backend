@@ -5,7 +5,7 @@ const upload = require("../middlewares/fileUpload");
 exports.publishNews = (req, res) => {
   // Set type to 'news' for file upload
   req.body.type = "news";
-  console.log("Request", req.body);
+
   // Use the upload middleware for single file upload
   upload(req, res, (err) => {
     if (err) {
