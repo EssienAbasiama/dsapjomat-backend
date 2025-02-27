@@ -19,6 +19,7 @@ const corsOptions = {
   origin: [
     "https://www.dsapjomat.com",
     "https://dsapjomat-backend.onrender.com",
+    "http://localhost:5173/",
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
