@@ -16,7 +16,10 @@ const app = express();
 
 // CORS options
 const corsOptions = {
-  origin: "https://dsapjomat-backend.onrender.com",
+  origin: [
+    "https://www.dsapjomat.com",
+    "https://dsapjomat-backend.onrender.com",
+  ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
