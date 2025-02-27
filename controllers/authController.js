@@ -4,6 +4,8 @@ const db = require("../config/database");
 const { JWT_SECRET, REFRESH_SECRET } = require("../Utils/constants");
 const sendEmail = require("../Utils/sendEmail");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 // Register User
 exports.registerUser = async (req, res) => {
@@ -91,20 +93,29 @@ exports.registerUser = async (req, res) => {
         }
 
         // Send verification email
-        const verificationLink = `http://localhost:5173/verify-email/${verificationToken}`;
+        const verificationLink = `https://www.dsapjomat.com/verify-email/${verificationToken}`;
         const emailSubject = "Verify Your Email";
 
-        const emailHTML = `
-        <div style="font-family: Arial, sans-serif; text-align: center;">
-          <h2>Welcome to Our Platform!</h2>
-          <p>Click the button below to verify your email:</p>
-          <a href="${verificationLink}" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-            Verify Email
-          </a>
-          <p>If you didn't request this, please ignore this email.</p>
-        </div>
-      `;
-
+        //   const emailHTML = `
+        //   <div style="font-family: Arial, sans-serif; text-align: center;">
+        //     <h2>Welcome to Our Platform!</h2>
+        //     <p>Click the button below to verify your email:</p>
+        //     <a href="${verificationLink}" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+        //       Verify Email
+        //     </a>
+        //     <p>If you didn't request this, please ignore this email.</p>
+        //   </div>
+        // `;
+        const templatePath = path.join(
+          __dirname,
+          "emailTemplates",
+          "verificationEmail.html"
+        );
+        let emailHTML = fs.readFileSync(templatePath, "utf8");
+        emailHTML = emailHTML.replace(
+          "{{VERIFICATION_LINK}}",
+          verificationLink
+        );
         await sendEmail(email, emailSubject, emailHTML);
 
         res
